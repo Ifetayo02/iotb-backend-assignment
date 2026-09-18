@@ -52,3 +52,89 @@ Memory stays flat because it's never holding the whole file any attempt to actua
  Built-in test runner, bundler, and package manager
  Faster cold starts and lower memory footprint
  Whether i will choose bun or Node on a real team project today and why: the "right" runtime is the one that removes friction for your specific workflow, not the one with the best benchmark headline so my choice will depend on my team's workflow
+
+ <-- CLASS 32: Express & TypeScript -->
+ 9. { hit: "by-id", id: "featured" }
+ Route 1 (/api/products/:id) as Express stops at the first matching route, so route 2 (the actual /featured route) never even gets checked.
+
+ { hit: "by-id", id: "42" }
+ Route 2 does not get checked because of the wildcard sitting on the top of the page
+
+ { hit: "fallback" }
+ app.use mounts middleware on a path prefix and is not an exact route itself so it matches the given path and anything nested under it. 
+10. Type of req.params.id: it's always a string no matter what the URL actually contains.
+The expression to convert it:
+ Number(req.params.id);
+ Why express does not convert it:
+ URL paths are just text to Express and it has no way of knowing which is a number.
+ 11. Routes — decide which URL and HTTP method triggers which handler.
+ Controllers — handle the HTTP conversation: parse the request, call the right service, and shape the response. 
+ Services — contain the actual logic and data access: where products come from, how they're filtered/validated/transformed, completely independent of HTTP concerns.
+ which file do i edit?
+ i will edit only product.service.ts because CSV is purely an implementation detail inside the service but the content it exposes to the rest of the app stays identical. That's the entire value of separating these layers
+ 12. the missing line:
+ app.use(express.json()); and it should be at the top of the page 
+ Express, by default, does not parse the incoming request body at all. When a request arrives, Express hands your handler the raw HTTP request and express.json() is a middleware that runs before your handlers: it checks for Content-Type: application/json, reads and parses the body, and attaches the result to req.body.
+ middleware runs in registration order (same "first match wins" logic as routes), it has to come before the routes that need it and  registering it after the POST route means requests reach the handler before the parser ever runs.
+13. app.use("/api/products", productRouter) mounts productRouter at the /api/products prefix and every route defined inside that router gets /api/products automatically stitched onto the front of it.
+router.get("/", ...)	returns GET /api/products
+    router.get("/:id", ...)	returns GET /api/products/:id 
+    router.get("/top") returns GET /api/products/top
+14. Successful POST creating a product → 201 Created
+    201 specifically signals that a new resource was created
+    Request for a product id that doesn't exist → 404 Not Found
+    404 indicates that nothing matches the identifier you are trying to look for.
+    POST missing a required name field → 400 Bad Request
+    This is a client error as the request itself is invalid
+    Unexpected crash inside a route handler → 500 Internal Server Error
+    This is a server-side failure and the server itself failed to complete a valid request
+    Successful GET returning a list → 200 OK
+    Typical request succeeded
+ <--CLASS 33: Middleware & Error Handling-->
+15. M1 in
+M2 GET /
+handler starts
+handler ends
+M1 out
+When M1 out runs, and why:
+M1 out runs after the route handler completes 
+The reason is that next() is a function call that doesn't return until everything downstream of it finishes
+16. Client sees: nothing. The request just hangs.
+    Terminal sees: nothing either.
+    Why Express can't guess "done": middleware often does async work (DB calls, API requests), so Express has no way to know if silence means it is still working and treats silence as still in progress. Sending response and calling are the only way express understands "done"
+17. Why Express treats both differently:
+Express doesn't inspect what the function does and decides purely by counting the function's declared parameters. If it has three parameters,express registers it as a normal middleware but if it has 4 parameters,then express treats it as an error handler.
+What happens if we clean up B to only three parameters:
+Express no longer recognizes it as an error handler at all. It gets registered as regular middleware instead
+18. next() takes no argument and moves to the next matching middleware/route
+next(err) takes an argument and tells Express that something has gone wrong and to skip all remaining middleware and jump to the nearest error-handling middleware 
+Express distinguishes these purely by whether an argument was passed
+Pipeline: [logger, json, routes, errorHandler]
+a) logger runs next()
+json runs next()
+routes runs, calls next() partway through
+   Express looks for the NEXT regular middleware after routes
+   there isn't one (errorHandler is an error-handler, not regular middleware)
+  if nothing else matches, Express falls through to its default 404 handler
+  b) logger runs  next()
+json runs next()
+routes runs, calls next(err) partway through
+  → Express immediately abandons the normal middleware chain
+  → skips any remaining regular middleware/routes entirely
+  → jumps straight to errorHandler (the first 4-argument middleware it finds)
+
+19. res.on("finish", callback) just subscribes a listener and doesn't run anything. next() then hands off to the handler, which calls res.send(). But sending data over the network is async I/O, so .send() returns immediately and once the response is fully sent, Node fires "finish" and only then does the callback run and log.
+So even though the listener is set up before the handler runs, its callback fires after, because it's waiting on an event that can't happen until sending is truly done
+20. Express 4: Nothing catches the rejection automatically. If findProduct(id) throws, the request just hangs and the terminal may show an unhandled rejection warning, but Express's error middleware never fires.
+Express 5: Rejected promises from async handlers are caught automatically and forwarded straight to the error middleware (err, req, res, next) with no extra code needed.
+try/catch + next(err)
+asyncHandler wrapper (avoids repeating try/catch everywhere)
+To check express version:
+npm list express
+21. A 404 means Express checked every registered route and middleware, and none of them matched the incoming URL/method at all
+while A 500 means a route did match and its handler did run but something went wrong during execution.
+
+Why the 404 handler must come before the error handler:
+Both middleware run in registration order, same as every route. The 404 handler is just a regular catch-all middleware. Registering the 404 handler before the error handler means: if no route matched, Express falls through the regular chain, hits the 404 handler, and responds. The error handler sits after it, ready to catch anything that explicitly errors out via next(err)
+what happens when they are swapped: actual errors now have no error handler to catch them
+Swapping the last two doesn't break the 404-handler's fundamental job, but it invites bugs and confusion about where errors actually get caught, especially in larger apps with more middleware
