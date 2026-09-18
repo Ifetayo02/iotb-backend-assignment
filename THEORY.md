@@ -47,3 +47,8 @@ Pipe approach (streaming): only a small chunk (e.g. 64 KB) sits in memory at any
 - 10,000,000 rows → same tiny, constant memory
 
 Memory stays flat because it's never holding the whole file any attempt to actually increase the rows does not really affect the memory
+8. 
+ Native TypeScript execution
+ Built-in test runner, bundler, and package manager
+ Faster cold starts and lower memory footprint
+ Whether i will choose bun or Node on a real team project today and why: the "right" runtime is the one that removes friction for your specific workflow, not the one with the best benchmark headline so my choice will depend on my team's workflow
