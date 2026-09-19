@@ -1,0 +1,22 @@
+{
+  "name": "products-inventory-api",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "generate": "tsx scripts/generate.ts",
+    "aggregate": "tsx scripts/aggregate.ts"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "winston": "^3.17.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "tsx": "^4.19.2",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.2"
+  }
+}
